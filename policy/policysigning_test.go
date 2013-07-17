@@ -1,4 +1,4 @@
-package s3dropbox
+package policy
 
 import (
 	"bytes"
