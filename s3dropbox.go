@@ -15,16 +15,16 @@ func NewS3DropboxClient() error {
 	return errors.New("No arguments passed to s3dropbox")
 }
 
-type Signer struct {
-	policy                       *Policy
-	awsSecretKeyId, awsSecretKey string
-}
-
 type Condition interface {
 	Matches(key, value string) bool
 	Name() string
 }
 
+/*
+Support for condition "eq".
+
+http://docs.aws.amazon.com/AmazonS3/latest/dev/HTTPPOSTForms.html#ConditionMatching
+*/
 type ConditionEq struct {
 	Key   string
 	Value string
@@ -48,12 +48,17 @@ func (c ConditionEq) Name() string {
 	return c.Key
 }
 
-type ConditionStartWith struct {
+/*
+Support for condition starts-with.
+
+http://docs.aws.amazon.com/AmazonS3/latest/dev/HTTPPOSTForms.html#ConditionMatching
+*/
+type ConditionStartsWith struct {
 	Key   string
 	Value string
 }
 
-func (c ConditionStartWith) MarshalJSON() (b []byte, ok error) {
+func (c ConditionStartsWith) MarshalJSON() (b []byte, ok error) {
 	writer := bytes.NewBuffer(b)
 	_, ok = writer.WriteString(`["starts-with", "`)
 	_, ok = writer.WriteString(c.Key)
@@ -63,14 +68,19 @@ func (c ConditionStartWith) MarshalJSON() (b []byte, ok error) {
 	return writer.Bytes(), nil
 }
 
-func (c ConditionStartWith) Matches(key, value string) bool {
+func (c ConditionStartsWith) Matches(key, value string) bool {
 	return c.Key == key && c.Value == value
 }
 
-func (c ConditionStartWith) Name() string {
+func (c ConditionStartsWith) Name() string {
 	return c.Key
 }
 
+/*
+Support for condition range elements.
+
+http://docs.aws.amazon.com/AmazonS3/latest/dev/HTTPPOSTForms.html#ConditionMatching
+*/
 type ConditionRange struct {
 	key      string
 	min, max float64
@@ -84,6 +94,11 @@ func (c ConditionRange) Name() string {
 	return c.key
 }
 
+/*
+Policy contains the expiration and set of conditions.
+
+See http://docs.aws.amazon.com/AmazonS3/latest/dev/HTTPPOSTForms.html#HTTPPOSTConstructPolicy
+*/
 type Policy struct {
 	Expiration time.Time   `json:"expiration"`
 	Conditions []Condition `json:"conditions"`
@@ -188,17 +203,30 @@ func (p *Policy) AddConditionEq(field, value string) {
 }
 
 func (p *Policy) AddConditionStartsWith(field, value string) {
-	p.Conditions = append(p.Conditions, ConditionStartWith{field, value})
+	p.Conditions = append(p.Conditions, ConditionStartsWith{field, value})
 }
 
 func (p *Policy) AddConditionRange(field string, min, max float64) {
 	p.Conditions = append(p.Conditions, ConditionRange{field, min, max})
 }
 
+/*
+Signer provide the ability to create the base64 encoded policy and
+the hmac signed by the AWS Credentials.
+*/
+type Signer struct {
+	policy         *Policy
+	awsSecretKeyId string
+	awsSecretKey   string
+}
+
 func NewS3DropboxSigner(AWSSecretKeyId string, AWSSecretKey string) (signer *Signer, ok error) {
 	return &Signer{nil, AWSSecretKeyId, AWSSecretKey}, nil
 }
 
+/*
+Add a policy to be signed.  This will replace any existing policy.
+*/
 func (signer *Signer) AddPolicy(policy *Policy) (ok error) {
 	if policy == nil {
 		return errors.New("Missing policy")
@@ -207,9 +235,21 @@ func (signer *Signer) AddPolicy(policy *Policy) (ok error) {
 	return nil
 }
 
+/*
+Sign the policy and generate the base64 encoded policy and the hmac based
+on the aws secret key.
+*/
+func (signer *Signer) Sign() (base64enc, sig []byte, ok error) {
+	if signer.policy == nil {
+		return nil, nil, errors.New("Missing policy.  Use AddPolicy(...) to add a policy.")
+	}
+	base64enc = signer.base64encodePolicy()
+	sig = signer.hmacPolicy(base64enc)
+	return
+}
+
 func (signer *Signer) base64encodePolicy() (base64enc []byte) {
-	l := base64.StdEncoding.EncodedLen(len(signer.policy.raw))
-	base64enc = make([]byte, l)
+	base64enc = make([]byte, base64.StdEncoding.EncodedLen(len(signer.policy.raw)))
 	base64.StdEncoding.Encode(base64enc, signer.policy.raw)
 	return
 }
@@ -218,17 +258,7 @@ func (signer *Signer) hmacPolicy(enc []byte) (sig []byte) {
 	hasher := hmac.New(sha1.New, []byte(signer.awsSecretKey))
 	hasher.Write(enc)
 	rawsig := hasher.Sum(nil)
-	l := base64.StdEncoding.EncodedLen(len(rawsig))
-	sig = make([]byte, l)
+	sig = make([]byte, base64.StdEncoding.EncodedLen(len(rawsig)))
 	base64.StdEncoding.Encode(sig, rawsig)
-	return
-}
-
-func (signer *Signer) Sign() (base64enc, sig []byte, ok error) {
-	if signer.policy == nil {
-		return nil, nil, errors.New("Missing policy.  Use AddPolicy(...) to add a policy.")
-	}
-	base64enc = signer.base64encodePolicy()
-	sig = signer.hmacPolicy(base64enc)
 	return
 }

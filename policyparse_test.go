@@ -44,10 +44,10 @@ func TestDegenerateParsePolicyMissingBucket(t *testing.T) {
 	}
 }
 
-func checkConditionStartWithType(t *testing.T, policy *Policy, key string) {
+func checkConditionStartsWithType(t *testing.T, policy *Policy, key string) {
 	if cond, ok := policy.Condition(key); ok == nil {
-		if _, ok := cond.(ConditionStartWith); !ok {
-			t.Errorf("Condition should be type ConditionStartWith")
+		if _, ok := cond.(ConditionStartsWith); !ok {
+			t.Errorf("Condition should be type ConditionStartsWith")
 		}
 	} else {
 		t.Errorf("Unable to locate matching condition")
@@ -92,7 +92,7 @@ func TestParsePolicyStartsWithMatch(t *testing.T) {
 		t.Errorf("Unable to parse startswith_match policy")
 	}
 
-	checkConditionStartWithType(t, policy, "sw")
+	checkConditionStartsWithType(t, policy, "sw")
 }
 
 func TestParsePolicyRangeMatch(t *testing.T) {
