@@ -14,6 +14,7 @@ import (
 type Condition interface {
 	Matches(key, value string) bool
 	Name() string
+	ValueString() string
 }
 
 /*
@@ -44,6 +45,10 @@ func (c ConditionEq) Name() string {
 	return c.Key
 }
 
+func (c ConditionEq) ValueString() string {
+	return c.Value
+}
+
 /*
 Support for condition starts-with.
 
@@ -72,6 +77,10 @@ func (c ConditionStartsWith) Name() string {
 	return c.Key
 }
 
+func (c ConditionStartsWith) ValueString() string {
+	return c.Value
+}
+
 /*
 Support for condition range elements.
 
@@ -88,6 +97,10 @@ func (c ConditionRange) Matches(key, value string) bool {
 
 func (c ConditionRange) Name() string {
 	return c.key
+}
+
+func (c ConditionRange) ValueString() string {
+	return fmt.Sprint(c.min, c.max)
 }
 
 /*
@@ -152,7 +165,9 @@ func (p *Policy) UnmarshalJSON(bytes []byte) error {
 			l := condition.([]interface{})
 			switch l[0].(string) {
 			case "starts-with":
-				p.AddConditionStartsWith(l[1].(string), l[2].(string))
+				if e := p.AddConditionStartsWith(l[1].(string), l[2].(string)); e != nil {
+					return e
+				}
 			case "eq":
 				p.AddConditionEq(l[1].(string), l[2].(string))
 			default:
@@ -198,8 +213,12 @@ func (p *Policy) AddConditionEq(field, value string) {
 	p.Conditions = append(p.Conditions, ConditionEq{field, value})
 }
 
-func (p *Policy) AddConditionStartsWith(field, value string) {
+func (p *Policy) AddConditionStartsWith(field, value string) error {
+	if field[0] != '$' {
+		return errors.New("Invalid key definition.  Key must start with $.")
+	}
 	p.Conditions = append(p.Conditions, ConditionStartsWith{field, value})
+	return nil
 }
 
 func (p *Policy) AddConditionRange(field string, min, max float64) {

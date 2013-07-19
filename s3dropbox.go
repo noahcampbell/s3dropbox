@@ -1,6 +1,6 @@
 package s3dropbox
 
-import(
+import (
 	"errors"
 )
 

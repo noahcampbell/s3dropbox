@@ -10,8 +10,15 @@ const (
 	missing_conditions_bucket_and_key = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [{"foobar": "barfoo"}]}`
 	missing_conditions_bucket         = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [{"$key": "barfoo"}]}`
 	exact_match                       = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [ {"$key": "barfoo"}, {"bucket": "bucketfoo"}, {"el": "val"}, ["eq", "el2", "val2"] ] }`
-	startswith_match                  = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [ {"$key": "barfoo"}, {"bucket": "bucketfoo"}, ["starts-with", "sw", "val"] ] }`
+	startswith_match_invalid          = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [ {"starts-with", "key", "barfoo"}, {"bucket": "bucketfoo"}, ["starts-with", "sw", "val"] ] }`
+	startswith_match                  = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [ ["starts-with", "$key", "barfoo"], {"bucket": "bucketfoo"}, ["starts-with", "$sw", "val"] ] }`
 	range_match                       = `{"expiration": "2012-01-01T00:00:00.000Z", "conditions": [{"$key": "barfoo"}, {"bucket": "bucketfoo"}, ["foobar", 1, 10]]}`
+)
+
+const (
+	COND_EQ = iota
+	COND_STARTWITH
+	COND_RANGE
 )
 
 func TestDegenerateParsePolicyNil(t *testing.T) {
@@ -44,34 +51,42 @@ func TestDegenerateParsePolicyMissingBucket(t *testing.T) {
 	}
 }
 
-func checkConditionStartsWithType(t *testing.T, policy *Policy, key string) {
+func checkConditionType(condition Condition) int {
+	switch condition.(type) {
+	case ConditionEq:
+		return COND_EQ
+	case ConditionStartsWith:
+		return COND_STARTWITH
+	case ConditionRange:
+		return COND_RANGE
+	default:
+		panic("Unknown type of condition")
+	}
+}
+
+func checkCondition(t *testing.T, policy *Policy, conditionType int, key, value string) {
 	if cond, ok := policy.Condition(key); ok == nil {
-		if _, ok := cond.(ConditionStartsWith); !ok {
-			t.Errorf("Condition should be type ConditionStartsWith")
+		if checkConditionType(cond) != conditionType {
+			t.Errorf("Condition should be type %s", conditionType)
+		}
+		if cond.ValueString() != value {
+			t.Errorf("Condition value not correct.  Expected: %s, Actual: %s", value, cond.ValueString())
 		}
 	} else {
 		t.Errorf("Unable to locate matching condition")
 	}
 }
 
-func checkConditionEqType(t *testing.T, policy *Policy, key string) {
-	if cond, ok := policy.Condition(key); ok == nil {
-		if _, ok := cond.(ConditionEq); !ok {
-			t.Errorf("Condition should be type ConditionEq")
-		}
-	} else {
-		t.Errorf("Unable to locate matching condition")
-	}
+func checkConditionStartsWithType(t *testing.T, policy *Policy, key, value string) {
+	checkCondition(t, policy, COND_STARTWITH, key, value)
 }
 
-func checkConditionRangeType(t *testing.T, policy *Policy, key string) {
-	if cond, ok := policy.Condition(key); ok == nil {
-		if _, ok := cond.(ConditionRange); !ok {
-			t.Errorf("Condition should be type ConditionEq")
-		}
-	} else {
-		t.Errorf("Unable to locate matching condition")
-	}
+func checkConditionEqType(t *testing.T, policy *Policy, key, value string) {
+	checkCondition(t, policy, COND_EQ, key, value)
+}
+
+func checkConditionRangeType(t *testing.T, policy *Policy, key, value string) {
+	checkCondition(t, policy, COND_RANGE, key, value)
 }
 
 func TestParsePolicyExactMatch(t *testing.T) {
@@ -81,8 +96,14 @@ func TestParsePolicyExactMatch(t *testing.T) {
 		t.Errorf("Unable to parse exact_match_dict policy")
 	}
 
-	checkConditionEqType(t, policy, "el")
-	checkConditionEqType(t, policy, "el2")
+	checkConditionEqType(t, policy, "el", "val")
+	checkConditionEqType(t, policy, "el2", "val2")
+}
+
+func TestDegenerateParsePolicyStartsWithInvalid(t *testing.T) {
+	if _, ok := ParsePolicy([]byte(startswith_match_invalid)); ok == nil {
+		t.Errorf("Invalid policy, starts-with key did not start with a $, did not return an error")
+	}
 }
 
 func TestParsePolicyStartsWithMatch(t *testing.T) {
@@ -92,7 +113,7 @@ func TestParsePolicyStartsWithMatch(t *testing.T) {
 		t.Errorf("Unable to parse startswith_match policy")
 	}
 
-	checkConditionStartsWithType(t, policy, "sw")
+	checkConditionStartsWithType(t, policy, "$sw", "val")
 }
 
 func TestParsePolicyRangeMatch(t *testing.T) {
@@ -102,5 +123,5 @@ func TestParsePolicyRangeMatch(t *testing.T) {
 		t.Errorf("Unable to parse range_match policy")
 	}
 
-	checkConditionRangeType(t, policy, "foobar")
+	checkConditionRangeType(t, policy, "foobar", "1 10")
 }
