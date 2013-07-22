@@ -123,13 +123,13 @@ func (p *Policy) ConditionMatches(key, value string) bool {
 	return false
 }
 
-func (p *Policy) Condition(key string) (condition Condition, ok error) {
+func (p *Policy) Condition(key string) (condition Condition, ok bool) {
 	for _, condition := range p.Conditions {
 		if condition.Name() == key {
-			return condition, nil
+			return condition, true
 		}
 	}
-	return nil, errors.New("Unable to locate condition")
+	return nil, false
 }
 
 func (p *Policy) UnmarshalJSON(bytes []byte) error {

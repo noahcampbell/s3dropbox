@@ -65,7 +65,7 @@ func checkConditionType(condition Condition) int {
 }
 
 func checkCondition(t *testing.T, policy *Policy, conditionType int, key, value string) {
-	if cond, ok := policy.Condition(key); ok == nil {
+	if cond, ok := policy.Condition(key); ok {
 		if checkConditionType(cond) != conditionType {
 			t.Errorf("Condition should be type %s", conditionType)
 		}
