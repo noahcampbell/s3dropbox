@@ -1,14 +1,20 @@
-s3dropbox
+S3dropbox
+---------
 
-S3 Dropbox Allows S3 Form Uploads in a convenient CLI
+`s3dropbox` provides S3 Form Uploads from the command line
+
+Status
+------
+
+[![Build Status](https://travis-ci.org/noahcampbell/s3dropbox.png?branch=master)](https://travis-ci.org/noahcampbell/s3dropbox)
 
 Description
-===========
+-----------
 
 s3dropbox allows a file to be uploaded to S3 using the AWS Form Upload technique.  It also allows for the creation of a policy document used during the upload.
 
-Synopsis
-========
+### Synopsis
+
 
 Upload a file using an existing policy
 
